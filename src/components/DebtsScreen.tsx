@@ -1,7 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useGastosStore, formatCurrency, formatDate } from '@/lib/store';
+import {
+  useGastosStore,
+  formatCurrency,
+  getDebtEndDate,
+  getMonthYearLabel,
+  getInstallmentSchedule,
+} from '@/lib/store';
 import type { Debt } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,7 +60,6 @@ export default function DebtsScreen() {
   const [totalValue, setTotalValue] = useState('');
   const [installmentType, setInstallmentType] = useState<'single' | 'installments'>('single');
   const [numInstallments, setNumInstallments] = useState('2');
-  const [dueDate, setDueDate] = useState('');
 
   const pendingDebts = debts.filter((d) => d.paidInstallments < d.installments);
   const paidOffDebts = debts.filter((d) => d.paidInstallments >= d.installments);
@@ -64,18 +69,18 @@ export default function DebtsScreen() {
     setTotalValue('');
     setInstallmentType('single');
     setNumInstallments('2');
-    setDueDate('');
   };
 
   const handleAddDebt = async () => {
     const raw = totalValue.replace(/\./g, '').replace(',', '.');
     const value = parseFloat(raw);
-    if (!desc.trim() || isNaN(value) || value <= 0 || !dueDate) {
-      toast.error('Preencha todos os campos', { description: 'Todos os campos são obrigatórios.' });
+    if (!desc.trim() || isNaN(value) || value <= 0) {
+      toast.error('Preencha todos os campos', { description: 'Informe a descrição e o valor total.' });
       return;
     }
     const installments = installmentType === 'single' ? 1 : Math.max(2, parseInt(numInstallments) || 2);
     const installmentValue = value / installments;
+    const startDate = new Date().toISOString();
 
     try {
       await addDebt({
@@ -83,7 +88,8 @@ export default function DebtsScreen() {
         totalValue: value,
         installments,
         installmentValue,
-        dueDate: new Date(dueDate + 'T12:00:00').toISOString(),
+        startDate,
+        dueDate: getDebtEndDate(startDate, installments),
       });
       resetForm();
       setShowNewDebt(false);
@@ -122,6 +128,11 @@ export default function DebtsScreen() {
     (sum, d) => sum + d.installmentValue * (d.installments - d.paidInstallments),
     0
   );
+
+  // Preview do formulário (valor da parcela e mês de término)
+  const previewValue = parseFloat(totalValue.replace(/\./g, '').replace(',', '.')) || 0;
+  const previewInstallments =
+    installmentType === 'single' ? 1 : Math.max(2, parseInt(numInstallments) || 2);
 
   return (
     <div className="p-4 pb-24 space-y-4 hide-scrollbar overflow-y-auto">
@@ -281,29 +292,37 @@ export default function DebtsScreen() {
                   onChange={(e) => setNumInstallments(e.target.value)}
                   className="h-10 field-dark text-foreground"
                 />
-                {totalValue && (
-                  <p className="text-xs text-primary font-medium">
-                    Valor da parcela:{' '}
-                    {formatCurrency(
-                      parseFloat(totalValue.replace(/\./g, '').replace(',', '.')) /
-                        Math.max(2, parseInt(numInstallments) || 2)
-                    )}
-                  </p>
-                )}
               </div>
             )}
-            <div className="space-y-1.5">
-              <Label className="text-muted-foreground text-xs font-medium uppercase tracking-wider">Data de Vencimento</Label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="pl-9 h-10 field-dark text-foreground"
-                />
+
+            {/* Preview automático */}
+            {previewValue > 0 && (
+              <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Valor de cada parcela</span>
+                  <span className="text-primary font-semibold">
+                    {formatCurrency(previewValue / previewInstallments)}
+                    <span className="text-muted-foreground font-normal">
+                      {' '}× {previewInstallments}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {previewInstallments > 1 ? 'Termina em' : 'Vencimento'}
+                  </span>
+                  <span className="text-foreground font-medium">
+                    {getMonthYearLabel(getDebtEndDate(new Date().toISOString(), previewInstallments))}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground pt-1 divider-subtle">
+                  {previewInstallments > 1
+                    ? `${previewInstallments} parcelas mensais a partir de ${getMonthYearLabel(new Date().toISOString())}.`
+                    : `Pagamento único em ${getMonthYearLabel(new Date().toISOString())}.`}
+                </p>
               </div>
-            </div>
+            )}
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
@@ -378,6 +397,7 @@ function DebtCard({
   onPay: () => void;
   onDelete: () => void;
 }) {
+  const [showSchedule, setShowSchedule] = useState(false);
   const isPaid = debt.paidInstallments >= debt.installments;
   const progress =
     debt.installments > 0
@@ -401,7 +421,9 @@ function DebtCard({
               <span>Valor total: {formatCurrency(debt.totalValue)}</span>
               <span>Parcelas: {debt.paidInstallments}/{debt.installments}</span>
               <span>Valor parcela: {formatCurrency(debt.installmentValue)}</span>
-              <span>Vencimento: {formatDate(debt.dueDate)}</span>
+              <span>
+                {debt.installments > 1 ? 'Termina em' : 'Vencimento'}: {getMonthYearLabel(debt.dueDate)}
+              </span>
             </div>
           </div>
         </div>
@@ -419,6 +441,56 @@ function DebtCard({
                 style={{ width: `${progress}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Schedule toggle + list */}
+        {debt.installments > 1 && (
+          <div className="divider-subtle pt-3">
+            <button
+              type="button"
+              onClick={() => setShowSchedule((v) => !v)}
+              className="w-full flex items-center justify-between text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                Cronograma de parcelas
+              </span>
+              {showSchedule ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
+            {showSchedule && (
+              <div className="mt-2 space-y-1 max-h-44 overflow-y-auto hide-scrollbar animate-fade-in">
+                {getInstallmentSchedule(debt.startDate, debt.installments, debt.installmentValue).map(
+                  (p) => {
+                    const paid = p.index <= debt.paidInstallments;
+                    return (
+                      <div
+                        key={p.index}
+                        className="flex items-center justify-between text-xs py-1"
+                      >
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          {paid ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                          ) : (
+                            <span className="h-3.5 w-3.5 rounded-full border border-white/15 shrink-0" />
+                          )}
+                          <span className={paid ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                            {p.index}/{debt.installments} — {p.label}
+                          </span>
+                        </span>
+                        <span className={paid ? 'text-muted-foreground' : 'text-foreground font-medium'}>
+                          {formatCurrency(p.value)}
+                        </span>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
           </div>
         )}
 

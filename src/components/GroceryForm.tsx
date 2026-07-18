@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useGastosStore, formatCurrency } from '@/lib/store';
 import type { GroceryItem } from '@/lib/types';
+import { PURCHASE_TYPES } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ interface GroceryFormProps {
   editingList?: {
     id: string;
     name: string;
+    purchaseType: string;
     items: GroceryItem[];
   } | null;
   onBack: () => void;
@@ -47,6 +49,12 @@ export default function GroceryForm({ editingList, onBack }: GroceryFormProps) {
     if (!editingList && groceryDraft?.listName) return groceryDraft.listName;
     return '';
   };
+
+  // Tipo de compra: se estiver editando, usa o salvo; senão default Supermercado
+  const initialType = editingList?.purchaseType || 'Supermercado';
+  const isInitialCustom = !!editingList && !PURCHASE_TYPES.includes(initialType as (typeof PURCHASE_TYPES)[number]);
+  const [purchaseType, setPurchaseType] = useState<string>(isInitialCustom ? 'Outros' : initialType);
+  const [customType, setCustomType] = useState<string>(isInitialCustom ? initialType : '');
 
   const [listName, setListName] = useState(getInitialName);
   const [items, setItems] = useState<GroceryItem[]>(getInitialItems);
@@ -121,6 +129,11 @@ export default function GroceryForm({ editingList, onBack }: GroceryFormProps) {
       return;
     }
 
+    const resolvedType =
+      purchaseType === 'Outros' && customType.trim()
+        ? customType.trim()
+        : purchaseType;
+
     const name =
       listName.trim() ||
       new Intl.DateTimeFormat('pt-BR', {
@@ -135,6 +148,7 @@ export default function GroceryForm({ editingList, onBack }: GroceryFormProps) {
       if (editingList) {
         await updateGroceryList(editingList.id, {
           name,
+          purchaseType: resolvedType,
           items,
           total,
         });
@@ -143,6 +157,7 @@ export default function GroceryForm({ editingList, onBack }: GroceryFormProps) {
         await addGroceryList({
           date: new Date().toISOString(),
           name,
+          purchaseType: resolvedType,
           items,
           total,
         });
@@ -206,6 +221,36 @@ export default function GroceryForm({ editingList, onBack }: GroceryFormProps) {
           </p>
         </div>
       )}
+
+      {/* Purchase Type */}
+      <div className="space-y-2">
+        <Label className="text-muted-foreground text-xs font-medium uppercase tracking-wider">Tipo de Compra</Label>
+        <div className="grid grid-cols-3 gap-2">
+          {PURCHASE_TYPES.map((type) => (
+            <Button
+              key={type}
+              type="button"
+              variant={purchaseType === type ? 'default' : 'outline'}
+              onClick={() => setPurchaseType(type)}
+              className={
+                purchaseType === type
+                  ? 'btn-primary h-9 text-xs px-2'
+                  : 'btn-ghost-premium h-9 text-xs px-2'
+              }
+            >
+              {type}
+            </Button>
+          ))}
+        </div>
+        {purchaseType === 'Outros' && (
+          <Input
+            value={customType}
+            onChange={(e) => setCustomType(e.target.value)}
+            className="h-10 field-dark text-foreground animate-fade-in"
+            placeholder="Especifique o tipo de compra"
+          />
+        )}
+      </div>
 
       {/* Name */}
       <div className="space-y-1.5">

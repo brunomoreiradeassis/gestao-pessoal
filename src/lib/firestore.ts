@@ -129,6 +129,7 @@ export async function addDebtFirestore(
     totalValue: debt.totalValue,
     installments: debt.installments,
     installmentValue: debt.installmentValue,
+    startDate: debt.startDate,
     dueDate: debt.dueDate,
     paidInstallments: 0,
     payments: [],
@@ -176,6 +177,7 @@ export async function addGroceryListFirestore(
     userId,
     date: list.date,
     name: list.name,
+    purchaseType: list.purchaseType,
     items: list.items,
     total: list.total,
   });
@@ -271,6 +273,7 @@ export function subscribeDividas(userId: string, callback: (data: Debt[]) => voi
         installments: docData.installments,
         paidInstallments: docData.paidInstallments || 0,
         installmentValue: docData.installmentValue,
+        startDate: toISO(docData.startDate ?? docData.dueDate),
         dueDate: toISO(docData.dueDate),
         payments: (docData.payments || []).map((p: Record<string, unknown>) => ({
           date: toISO(p.date),
@@ -294,6 +297,7 @@ export function subscribeListas(userId: string, callback: (data: GroceryList[]) 
         id: d.id,
         date: toISO(docData.date),
         name: docData.name,
+        purchaseType: docData.purchaseType || 'Supermercado',
         items: (docData.items || []).map((i: Record<string, unknown>) => ({
           id: i.id as string,
           name: i.name as string,

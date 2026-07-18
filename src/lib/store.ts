@@ -189,6 +189,39 @@ export function getMonthName(month: number): string {
   return MONTH_NAMES[month - 1] || '';
 }
 
+// Calcula a data da última parcela a partir da data inicial e do nº de parcelas
+export function getDebtEndDate(startDate: string, installments: number): string {
+  const d = new Date(startDate);
+  d.setMonth(d.getMonth() + Math.max(0, installments - 1));
+  return d.toISOString();
+}
+
+// Rótulo "Mês de Ano" (ex: "Julho de 2026")
+export function getMonthYearLabel(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${getMonthName(d.getMonth() + 1)} de ${d.getFullYear()}`;
+}
+
+// Gera o cronograma de parcelas mês a mês a partir da data inicial
+export function getInstallmentSchedule(
+  startDate: string,
+  installments: number,
+  installmentValue: number
+): { index: number; date: string; label: string; value: number }[] {
+  const schedule: { index: number; date: string; label: string; value: number }[] = [];
+  for (let i = 0; i < installments; i++) {
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + i);
+    schedule.push({
+      index: i + 1,
+      date: d.toISOString(),
+      label: getMonthYearLabel(d.toISOString()),
+      value: installmentValue,
+    });
+  }
+  return schedule;
+}
+
 export function parseCurrencyInput(value: string): number {
   const cleaned = value.replace(/[^\d,.-]/g, '').replace(',', '.');
   const parsed = parseFloat(cleaned);

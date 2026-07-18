@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useGastosStore, formatCurrency, formatDate } from '@/lib/store';
+import { useGastosStore, formatCurrency, formatDate, getMonthName } from '@/lib/store';
 import type { GroceryList } from '@/lib/types';
 import GroceryForm from './GroceryForm';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +40,14 @@ export default function GroceryScreen() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const sortedLists = [...groceryLists].sort(
+  // Apenas compras do mês atual
+  const now = new Date();
+  const currentMonthLists = groceryLists.filter((l) => {
+    const d = new Date(l.date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+
+  const sortedLists = [...currentMonthLists].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
@@ -79,7 +86,12 @@ export default function GroceryScreen() {
       <GroceryForm
         editingList={
           editingList
-            ? { id: editingList.id, name: editingList.name, items: editingList.items }
+            ? {
+                id: editingList.id,
+                name: editingList.name,
+                purchaseType: editingList.purchaseType,
+                items: editingList.items,
+              }
             : null
         }
         onBack={handleBack}
@@ -87,13 +99,13 @@ export default function GroceryScreen() {
     );
   }
 
-  const totalSpent = groceryLists.reduce((sum, l) => sum + l.total, 0);
+  const totalSpent = currentMonthLists.reduce((sum, l) => sum + l.total, 0);
 
   return (
     <div className="p-4 pb-24 space-y-4 hide-scrollbar overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground tracking-tight">Supermercado</h2>
+        <h2 className="text-lg font-bold text-foreground tracking-tight">Compras</h2>
         <div className="text-sm text-muted-foreground">
           Total: <span className="text-[#00d4ff] font-semibold">{formatCurrency(totalSpent)}</span>
         </div>
@@ -103,10 +115,12 @@ export default function GroceryScreen() {
       <Card className="premium-card-cyan">
         <CardContent className="pt-6">
           <div className="text-center">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Total Gasto no Supermercado</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">
+              Total Gasto em {getMonthName(now.getMonth() + 1)}
+            </p>
             <p className="text-3xl font-bold text-[#00d4ff] tracking-tight">{formatCurrency(totalSpent)}</p>
             <p className="text-xs text-muted-foreground mt-2">
-              {groceryLists.length} compra{groceryLists.length !== 1 ? 's' : ''} registrada{groceryLists.length !== 1 ? 's' : ''}
+              {currentMonthLists.length} compra{currentMonthLists.length !== 1 ? 's' : ''} neste mês
             </p>
           </div>
         </CardContent>
@@ -161,9 +175,14 @@ export default function GroceryScreen() {
                     onClick={() => toggleExpand(list.id)}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {list.name}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {list.name}
+                        </p>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#00d4ff]/10 text-[#00d4ff] border border-[#00d4ff]/20 shrink-0">
+                          {list.purchaseType}
+                        </span>
+                      </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatDate(list.date)} - {list.items.length} item{list.items.length !== 1 ? 's' : ''}
                       </p>
