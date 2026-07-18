@@ -1,7 +1,7 @@
 {
   "name": "Gestão Financeira",
-  "short_name": "Finanças",
-  "description": "Sistema de gestão financeira pessoal. Controle salários, dívidas e compras de supermercado.",
+  "short_name": "Gestão Financeira",
+  "description": "Sistema de gestão financeira pessoal. Controle salários, dívidas e compras.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
