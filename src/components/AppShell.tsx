@@ -25,7 +25,7 @@ const TABS: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'salary', label: 'Salário', icon: Wallet },
   { id: 'debts', label: 'Dívidas', icon: CreditCard },
-  { id: 'grocery', label: 'Mercado', icon: ShoppingCart },
+  { id: 'grocery', label: 'Compras', icon: ShoppingCart },
   { id: 'cadastros', label: 'Cadastros', icon: UserCog },
 ];
 

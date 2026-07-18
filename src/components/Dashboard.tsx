@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useGastosStore, formatCurrency, getMonthName } from '@/lib/store';
 import MonthSelector from './MonthSelector';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,10 +35,30 @@ export default function Dashboard() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [typeFilter, setTypeFilter] = useState<string>('Todos');
 
   const monthlySalaries = useGastosStore((s) => s.monthlySalaries);
   const debts = useGastosStore((s) => s.debts);
   const groceryLists = useGastosStore((s) => s.groceryLists);
+
+  // Tipos de compra disponíveis no período selecionado
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>();
+    groceryLists.forEach((l) => {
+      const d = new Date(l.date);
+      if (d.getMonth() + 1 === month && d.getFullYear() === year) {
+        set.add(l.purchaseType || 'Outros');
+      }
+    });
+    return Array.from(set);
+  }, [groceryLists, month, year]);
+
+  // Reseta o filtro se o tipo selecionado não existir no período
+  useEffect(() => {
+    if (typeFilter !== 'Todos' && !availableTypes.includes(typeFilter)) {
+      setTypeFilter('Todos');
+    }
+  }, [availableTypes, typeFilter]);
 
   const data = useMemo(() => {
     const salaryRecord = monthlySalaries.find(
@@ -56,12 +76,22 @@ export default function Dashboard() {
       return sum + paymentsInMonth.reduce((s, p) => s + p.amount, 0);
     }, 0);
 
-    const groceriesThisMonth = groceryLists
-      .filter((l) => {
-        const d = new Date(l.date);
-        return d.getMonth() + 1 === month && d.getFullYear() === year;
-      })
-      .reduce((sum, l) => sum + l.total, 0);
+    // Compras do mês filtradas pelo tipo selecionado
+    const groceriesInMonth = groceryLists.filter((l) => {
+      const d = new Date(l.date);
+      return d.getMonth() + 1 === month && d.getFullYear() === year;
+    });
+    const filteredGroceries = groceriesInMonth.filter(
+      (l) => typeFilter === 'Todos' || (l.purchaseType || 'Outros') === typeFilter
+    );
+    const groceriesThisMonth = filteredGroceries.reduce((sum, l) => sum + l.total, 0);
+
+    // Total por tipo de compra (para o gráfico)
+    const byType = new Map<string, number>();
+    filteredGroceries.forEach((l) => {
+      const t = l.purchaseType || 'Outros';
+      byType.set(t, (byType.get(t) || 0) + l.total);
+    });
 
     const totalExpenses = debtPaymentsThisMonth + groceriesThisMonth;
     const balance = totalIncome - totalExpenses;
@@ -73,16 +103,15 @@ export default function Dashboard() {
         0
       );
 
-    const pieData = [];
-    if (groceriesThisMonth > 0) {
-      pieData.push({ name: 'Supermercado', value: groceriesThisMonth, color: CHART_CYAN });
-    }
+    const TYPE_PALETTE = [CHART_CYAN, CHART_GREEN, CHART_YELLOW, '#a855f7', '#ff8a3d', '#00e0c7'];
+    const pieData: { name: string; value: number; color: string }[] = [];
+    Array.from(byType.entries())
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([name, value], i) => {
+        pieData.push({ name, value, color: TYPE_PALETTE[i % TYPE_PALETTE.length] });
+      });
     if (debtPaymentsThisMonth > 0) {
       pieData.push({ name: 'Dívidas', value: debtPaymentsThisMonth, color: CHART_PINK });
-    }
-    const otherExpenses = totalExpenses - groceriesThisMonth - debtPaymentsThisMonth;
-    if (otherExpenses > 0) {
-      pieData.push({ name: 'Outros', value: otherExpenses, color: CHART_YELLOW });
     }
 
     const barData = [
@@ -98,7 +127,7 @@ export default function Dashboard() {
       totalExpenses, balance, totalPendingDebts,
       pieData, barData, showWarning,
     };
-  }, [month, year, monthlySalaries, debts, groceryLists]);
+  }, [month, year, typeFilter, monthlySalaries, debts, groceryLists]);
 
   const customTooltipStyle = {
     backgroundColor: '#16162a',
@@ -128,6 +157,26 @@ export default function Dashboard() {
       <p className="text-sm text-muted-foreground">
         {getMonthName(month)} {year}
       </p>
+
+      {/* Purchase Type Filter */}
+      {availableTypes.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto hide-scrollbar -mx-1 px-1 pb-1">
+          {['Todos', ...availableTypes].map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setTypeFilter(type)}
+              className={
+                typeFilter === type
+                  ? 'shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-primary/15 text-primary border border-primary/25 transition-all'
+                  : 'shrink-0 text-xs font-medium px-3 py-1.5 rounded-full bg-white/[0.03] text-muted-foreground border border-white/[0.06] hover:text-foreground transition-all'
+              }
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Warning Banner */}
       {data.showWarning && (
@@ -189,7 +238,7 @@ export default function Dashboard() {
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-2 mb-1.5">
               <ShoppingCart className="h-4 w-4 text-[#00d4ff]" />
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Mercado</span>
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Compras</span>
             </div>
             <p className="text-base sm:text-lg font-bold text-[#00d4ff] tracking-tight">
               {formatCurrency(data.groceriesThisMonth)}

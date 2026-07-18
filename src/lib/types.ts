@@ -24,7 +24,8 @@ export interface Debt {
   installments: number; // 1 = parcela única
   paidInstallments: number;
   installmentValue: number;
-  dueDate: string; // ISO date
+  startDate: string; // ISO date - data de cadastro / 1ª parcela
+  dueDate: string; // ISO date - data da última parcela (fim)
   payments: DebtPayment[];
 }
 
@@ -39,9 +40,22 @@ export interface GroceryList {
   id: string;
   date: string; // ISO date
   name: string;
+  purchaseType: string; // tipo de compra (Supermercado, Farmácia, etc. ou personalizado)
   items: GroceryItem[];
   total: number;
 }
+
+// Tipos de compra fixos (mais opção "Outros" editável)
+export const PURCHASE_TYPES = [
+  'Supermercado',
+  'Farmácia',
+  'Vestuário',
+  'Lazer',
+  'Transporte',
+  'Restaurante',
+  'Casa',
+  'Outros',
+] as const;
 
 export interface Usuario {
   id: string;
